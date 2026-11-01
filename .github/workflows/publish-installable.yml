@@ -1,0 +1,65 @@
+name: Publish installable ZIP
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-installable.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-installable-v1.0.0
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: '975371e8c2ef0fe5c3174247e3df19919331159f'
+      TAG: 'v1.0.0'
+      ASSET: 'astrbot_plugin_context_recorder-v1.0.0.zip'
+      GH_REPO: '${{ github.repository }}'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: '975371e8c2ef0fe5c3174247e3df19919331159f'
+      - name: Build and validate installable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git archive --format=zip --output="$ASSET" "$SOURCE_SHA"
+          python - <<'PY'
+          import os, subprocess, zipfile
+          from pathlib import PurePosixPath
+          with zipfile.ZipFile(os.environ['ASSET']) as z:
+              assert z.testzip() is None, 'Corrupt ZIP'
+              files = {n for n in z.namelist() if not n.endswith('/')}
+              expected = set(subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', os.environ['SOURCE_SHA']], text=True).splitlines())
+              assert files == expected, 'ZIP differs from source commit'
+              assert {'main.py', 'metadata.yaml', '_conf_schema.json'}.issubset(files), 'Missing installable plugin files'
+              for name in files:
+                  p = PurePosixPath(name)
+                  assert not p.is_absolute() and '..' not in p.parts
+                  assert not any(x in {'.git', '__pycache__', 'captures', 'data'} for x in p.parts)
+                  source = subprocess.check_output(['git', 'show', os.environ['SOURCE_SHA'] + ':' + name])
+                  assert z.read(name) == source, name
+              print('Verified', len(files), 'installable files against', os.environ['SOURCE_SHA'])
+          PY
+          sha256sum "$ASSET" > "$ASSET.sha256"
+      - name: Publish release with installation package
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          最终上下文记录器 v1.0.0
+          
+          安装：下载 astrbot_plugin_context_recorder-v1.0.0.zip，在 AstrBot 插件管理中选择从本地 ZIP 安装。
+          
+          安装包根目录包含 main.py、metadata.yaml 及插件所需源码；不含聊天记录、运行数据或历史备份。
+          
+          源码提交：975371e8c2ef0fe5c3174247e3df19919331159f
+          NOTES
+          gh release create "$TAG" "$ASSET" "$ASSET.sha256" --target "$SOURCE_SHA" --title '最终上下文记录器 v1.0.0' --notes-file release-notes.md --latest
