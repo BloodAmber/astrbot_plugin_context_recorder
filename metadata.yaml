@@ -1,0 +1,6 @@
+name: astrbot_plugin_context_recorder
+display_name: 最终上下文记录器
+desc: 记录发送给 LLM 的最终 HTTP JSON 上下文，本地查看，按总容量滚动覆盖。
+version: v1.0.0
+author: BloodAmber
+repo: https://github.com/BloodAmber/astrbot_plugin_context_recorder

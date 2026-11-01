@@ -1,0 +1,26 @@
+{
+  "enabled": {
+    "description": "启用最终上下文记录",
+    "type": "bool", "default": true
+  },
+  "max_total_mb": {
+    "description": "日志文件总容量上限（MiB）",
+    "type": "int", "default": 100,
+    "hint": "最小 1 MiB。超过上限删除最旧文件；降低上限并重载时立即清理。仅计算 logs 下的记录文件。"
+  },
+  "segment_mb": {
+    "description": "单个日志文件目标大小（MiB）",
+    "type": "int", "default": 10,
+    "hint": "不超过总上限。单条记录不拆分，因此单文件可超过此目标，但不会超过总容量上限。"
+  },
+  "include_inline_media": {
+    "description": "保留图片、音频等内嵌 Base64 数据",
+    "type": "bool", "default": false,
+    "hint": "默认记录媒体类型、长度与哈希代替 data URL 和 Gemini inlineData。文本上下文完整保留。开启后日志体积可能明显增加。"
+  },
+  "allowed_hosts": {
+    "description": "只记录指定模型 API 主机（留空记录全部受支持请求）",
+    "type": "list", "default": [],
+    "hint": "例如 api.openai.com，只填主机名，不含协议和路径。记录范围包含插件在同一进程发起的模型调用。"
+  }
+}

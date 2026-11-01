@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.venv/
+data/
+logs/
+captures/
+*.log
+*.jsonl

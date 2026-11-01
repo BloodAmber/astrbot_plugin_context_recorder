@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>最终上下文 · 本地查看器</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f3ef;color:#222;font:15px system-ui,"Microsoft YaHei",sans-serif}header{padding:24px 30px;background:#fff;border-bottom:1px solid #ddd}h1{margin:0 0 12px;font-size:24px}p{color:#666}input[type=search]{width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;margin-top:16px}main{display:grid;grid-template-columns:330px 1fr;height:calc(100vh - 240px);min-height:400px}nav{overflow:auto;border-right:1px solid #ddd;padding:12px}nav button{display:block;width:100%;text-align:left;padding:14px;margin:0 0 8px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;overflow-wrap:anywhere}nav button.active{border-color:#a55e25;background:#fff6e9}article{padding:24px;overflow:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff;border:1px solid #ddd;padding:16px;border-radius:8px;font:14px/1.65 Consolas,monospace}.role{font-weight:bold;color:#92551f;margin-top:20px}summary{cursor:pointer;padding:12px;background:#e9e7e0}small{color:#666}#status{margin-top:12px}button{font:inherit}@media(max-width:720px){main{grid-template-columns:1fr;height:auto}nav{max-height:260px}header,article{padding:16px}}
+</style>
+<header>
+<h1>最终上下文 · 本地查看器</h1>
+<p>选择一个或多个 context-*.jsonl 文件。所有内容只在当前浏览器内读取，无需联网。日志更新后重新选择文件。</p>
+<input id="files" type="file" accept=".jsonl,.json" multiple>
+<input id="search" type="search" placeholder="搜索模型、会话、系统提示或任意正文…" aria-label="搜索记录">
+<div id="status" role="status">尚未打开日志</div>
+</header>
+<main><nav id="list" aria-label="请求列表"></nav><article id="detail">打开日志后，选择左侧请求查看完整上下文。</article></main>
+<script>
+let records=[], selected=null;
+const $=id=>document.getElementById(id);
+function textElement(tag,text,parent,cls){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;parent.appendChild(e);return e}
+function asText(value){return typeof value==='string'?value:JSON.stringify(value,null,2)}
+function show(entry,button){
+ selected=entry;document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));button.classList.add('active');
+ const d=$('detail');d.replaceChildren();
+ textElement('h2',entry.model||entry.api||'请求',d);
+ textElement('p',`${entry.time||''} · ${entry.host||''}${entry.path||''}`,d);
+ textElement('small',`ID: ${entry.id||''} · ${entry._file}`,d);
+ if(entry.payload_omitted){textElement('pre',`请求超过总容量上限，正文未保存。\n原始记录：${entry.original_record_bytes} 字节\n上限：${entry.limit_bytes} 字节`,d);return}
+ const p=entry.payload||{};
+ if(p.system||p.systemInstruction||p.system_instruction||p.instructions){textElement('div','SYSTEM',d,'role');textElement('pre',asText(p.system||p.systemInstruction||p.system_instruction||p.instructions),d)}
+ const messages=p.messages||p.input||p.contents||[];
+ if(typeof messages==='string'){textElement('div','USER',d,'role');textElement('pre',messages,d)}
+ else if(Array.isArray(messages))for(const m of messages){textElement('div',(m.role||m.type||'MESSAGE').toUpperCase(),d,'role');textElement('pre',asText(m.content??m.parts??m),d)}
+ const details=document.createElement('details');d.appendChild(details);textElement('summary','完整记录 JSON（含工具定义及所有请求参数）',details);textElement('pre',JSON.stringify(entry,(key,value)=>key==='_file'||key==='_search'?undefined:value,2),details);
+}
+function render(){const q=$('search').value.toLowerCase(),list=$('list');list.replaceChildren();const visible=records.filter(r=>r._search.includes(q));$('status').textContent=`${visible.length} / ${records.length} 条请求`;
+ for(const r of visible){const b=textElement('button',`${new Date(r.time).toLocaleString()}\n${r.model||r.api}${r.payload_omitted?' · 正文超限':''}`,list);b.style.whiteSpace='pre-wrap';if(r===selected)b.classList.add('active');b.onclick=()=>show(r,b)}
+}
+$('files').onchange=async event=>{records=[];selected=null;let bad=0;for(const file of event.target.files){for(const line of (await file.text()).split(/\r?\n/)){if(!line.trim())continue;try{const r=JSON.parse(line);if(!r||typeof r!=='object')throw Error();r._search=JSON.stringify(r).toLowerCase();r._file=file.name;records.push(r)}catch{bad++}}}records.sort((a,b)=>String(b.time).localeCompare(String(a.time)));$('detail').textContent='选择左侧请求查看。';render();if(bad)$('status').textContent+=`；跳过 ${bad} 条无效或尚未写完的行`};
+$('search').oninput=render;
+</script>
+</html>
